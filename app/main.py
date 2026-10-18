@@ -112,6 +112,8 @@ async def root():
     }
 
 @app.get("/health", tags=["Infraestructura"])
+@app.get("/api/health", tags=["Infraestructura"])
+@app.get(f"{settings.API_V1_STR}/health", tags=["Infraestructura"])
 async def health_check():
     """Health check de grado de producción que valida el pool de base de datos."""
     db_status = "connected"
@@ -121,9 +123,9 @@ async def health_check():
     except Exception as e:
         logger.error(f"Falla de salud en base de datos: {e}")
         return JSONResponse(
-            status_code=503,
+            status_code=500,
             content={
-                "status": "degraded",
+                "status": "error",
                 "database": "unreachable",
                 "system": settings.PROJECT_NAME,
                 "version": settings.VERSION,
