@@ -49,8 +49,8 @@ sgf_mobile/
 
 1. Clonar el repositorio:
    ```bash
-   git clone https://github.com/renkaidev/Fiscalis-Frontend.git
-   cd Fiscalis-Frontend
+   git clone https://github.com/naxo16/FiscalisFrontend.git
+   cd FiscalisFrontend
    ```
 
 2. Obtener dependencias:
