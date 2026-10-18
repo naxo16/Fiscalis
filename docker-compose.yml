@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: fiscalis_postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fiscalis_core}
+      POSTGRES_USER: ${POSTGRES_USER:-fiscalis_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CambiarPorClaveSegura2026!}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./solo_datos.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - fiscalis_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fiscalis_admin} -d ${POSTGRES_DB:-fiscalis_core}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fiscalis_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fiscalis_admin}:${POSTGRES_PASSWORD:-CambiarPorClaveSegura2026!}@db:5432/${POSTGRES_DB:-fiscalis_core}
+      SECRET_KEY: ${SECRET_KEY:-LlaveMaestraCriptograficaSGF2026Municipalidad}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
+      PROJECT_NAME: "Fiscalis - Core Backend"
+      VERSION: "1.0.0"
+      API_V1_STR: "/api/v1"
+      DEBUG: "FALSE"
+    volumes:
+      - evidencias_storage:/app/storage/evidencias
+    ports:
+      - "8000:8000"
+    networks:
+      - fiscalis_network
+
+networks:
+  fiscalis_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  evidencias_storage:
+    driver: local

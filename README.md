@@ -1,96 +1,86 @@
-SGF_CORE Backend
+# SGF_CORE Backend - Sistema de Gestión Fiscalizadora Municipal
 
-Sistema de Gestión Fiscalizadora (SGF_CORE) - Backend de alto rendimiento construido con FastAPI. Diseñado bajo principios de Clean Architecture para servir como motor validador en una solución distribuida Offline-First.
-🚀 Tecnologías Clave
+Motor transaccional y validador de alto rendimiento para fiscalización municipal y registro de infracciones vehiculares en terreno, construido con **FastAPI** y **PostgreSQL + PostGIS**. Diseñado bajo principios de **Clean Architecture** para servir como nodo central en una solución distribuida **Offline-First**.
 
-    Framework: FastAPI (Asíncrono)
+---
 
-    Base de Datos: PostgreSQL + PostGIS
+## 🚀 Tecnologías Clave
 
-    ORM: SQLAlchemy 2.0 (Asíncrono)
+- **Framework Web:** FastAPI (Asíncrono, Python 3.12+)
+- **Base de Datos Geoespacial:** PostgreSQL 16 + PostGIS (`geometry(Point, 4326)`)
+- **ORM Asíncrono:** SQLAlchemy 2.0 + Asyncpg
+- **Migraciones:** Alembic
+- **Seguridad y Criptografía:** JWT Stateless (HS256), Multi-Factor Authentication TOTP (RFC 6238), Rotación de llaves Fernet (AES-256)
+- **CORS Multi-Origen:** Configuración permisiva y headers CORP para interoperabilidad con Flutter Web CanvasKit
+- **Validación de Esquemas:** Pydantic V2
+- **QA & Testing:** Pytest 9 + Pytest-Asyncio + HTTPX
 
-    Migraciones: Alembic
+---
 
-    Seguridad: JWT Stateless (con Bypass de desarrollo)
+## 🏗️ Estructura del Repositorio
 
-    Validación: Pydantic V2
-
-    QA: Pytest (Suite asíncrona)
-
-🏗️ Estructura del Proyecto
-Plaintext
-
+```
 sgf_backend/
-│
 ├── app/
-│   ├── api/            # Capa de red (Routers y Dependencias)
-│   │   ├── endpoints/  # Controladores (infracciones, auth, evidencias)
-│   │   └── deps.py     # Dependencias (DB, Auth, Bypass)
-│   ├── core/           # Configuración (settings, database, security)
-│   ├── models/         # Modelos SQLAlchemy (DB)
-│   ├── repositories/   # Capa de datos (Lógica de persistencia)
-│   ├── schemas/        # Contratos de datos (Pydantic)
-│   ├── services/       # Lógica de negocio y utilidades (Archivos, hash)
-│   ├── tests/          # Suite de pruebas (pytest)
-│   └── main.py         # Punto de entrada de FastAPI
-│
-├── storage/            # Almacenamiento local de evidencias
-├── alembic/            # Migraciones de base de datos
-├── .env                # Variables de entorno (No subir a Git)
-├── iniciar_sistema.bat # Script de arranque (Doble clic)
-└── requirements.txt    # Dependencias
+│   ├── api/            # Capa de red (Routers, Middleware CORS, Inyección de dependencias)
+│   │   ├── endpoints/  # Controladores (auth, infracciones, evidencias, salud)
+│   │   └── deps.py     # Dependencias de seguridad e inyección de AsyncSession
+│   ├── core/           # Configuración (settings, database engine, hashing de contraseñas)
+│   ├── models/         # Modelos SQLAlchemy relacionales y geoespaciales
+│   ├── repositories/   # Capa de acceso a datos (Patrón Repositorio)
+│   ├── schemas/        # DTOs y contratos Pydantic para validación de entrada/salida
+│   ├── services/       # Servicios de negocio (almacenamiento de archivos, Magic Bytes)
+│   └── tests/          # Suite de pruebas automatizadas (17 tests asíncronos)
+├── scripts/            # Scripts de inicialización, seeds y comprobación de integridad
+├── alembic/            # Migraciones versionadas de esquema de base de datos
+├── Dockerfile          # Empaquetado de producción multi-etapa
+├── docker-compose.yml  # Orquestador con PostgreSQL 16 PostGIS y backend FastAPI
+└── requirements.txt    # Dependencias congeladas
+```
 
-🛠️ Instalación Local
+---
 
-    Clonar el repositorio:
-    Bash
+## 🛠️ Instalación y Puesta en Marcha
 
-    git clone <url-de-tu-repo>
-    cd sgf_backend
+### Opción 1: Despliegue con Docker Compose (Recomendado para Producción)
 
-    Entorno Virtual:
-    Bash
+```bash
+# 1. Clonar variables de entorno
+cp .env.example .env
 
-    python -m venv venv
-    venv\Scripts\activate
+# 2. Levantar el stack completo (Base de datos PostGIS + API Backend)
+docker compose up -d --build
+```
 
-    Instalar dependencias:
-    Bash
+### Opción 2: Instalación Local con Entorno Virtual
 
-    pip install -r requirements.txt
+```bash
+# 1. Crear y activar entorno virtual
+python -m venv venv
+venv\Scripts\activate   # Windows
 
-    Configurar variables:
-    Crea un archivo .env en la raíz basado en los ejemplos, configurando DATABASE_URL, SECRET_KEY, y DEBUG=True.
+# 2. Instalar dependencias
+pip install -r requirements.txt
 
-    Migrar Base de Datos:
-    Bash
+# 3. Aplicar migraciones
+alembic upgrade head
 
-    alembic upgrade head
+# 4. Iniciar servidor de desarrollo
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
 
-🏃‍♂️ Ejecución
+---
 
-Para iniciar el sistema de forma profesional (sin abrir consola manualmente):
+## 🧪 Pruebas Automatizadas (QA Suite)
 
-    Doble clic en el archivo: iniciar_sistema.bat
+Para ejecutar la suite de 17 pruebas asíncronas:
+```bash
+pytest app/tests -v
+```
 
-        Este script activará el entorno, lanzará el servidor y abrirá automáticamente la documentación en http://127.0.0.1:8000/docs.
-
-🧪 Pruebas Automatizadas
-
-Para validar que la API mantiene su integridad y resiliencia ante fallos:
-Bash
-
-pytest -v
-
-(Se recomienda ejecutar esto tras cualquier cambio en el repositorio o la lógica de negocio).
-🔐 Desarrollo y Seguridad
-
-    Bypass de Desarrollo: Para pruebas con Flutter sin login, utiliza el token dev-flutter-token-123 en el header Authorization: Bearer dev-flutter-token-123.
-
-    Seguridad de Archivos: El backend utiliza validación de Magic Bytes para asegurar que solo se suban imágenes válidas, rechazando ejecutables camuflados.
-
-Notas adicionales para el equipo municipal:
-
-    Backup: Se recomienda respaldar periódicamente la carpeta storage/evidencias y realizar un pg_dump de la base de datos sgf_core.
-
-    Logs: Los errores críticos se registran en la consola de ejecución y son persistentes en el log del sistema.
+Cobertura verificada:
+1. `test_health.py`: Verificación de salud y versión del sistema.
+2. `test_auth.py`: Autenticación por contraseña, MFA TOTP, validación de sesiones y rechazo de tokens inválidos.
+3. `test_cors_flutter_web.py`: Preflight OPTIONS de origen cruzado para puertos dinámicos de Flutter Web.
+4. `test_infracciones.py`: Rechazo de payloads malformados (422) y manejo de caídas de BD (500 Exponential Backoff).
+5. `test_sync_e2e.py`: Idempotencia de transacciones, persistencia geométrica PostGIS y serialización de actas.

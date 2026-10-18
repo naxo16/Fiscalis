@@ -13,18 +13,26 @@ from app.schemas.auth import (
 router = APIRouter()
 auth_repo = AuthRepository()
 
-# Utilidad para cifrar/descifrar TOTP secret usando Fernet (simplificado MVP)
-from cryptography.fernet import Fernet
+# Utilidad para cifrar/descifrar TOTP secret usando Fernet con soporte para rotación de claves
+from cryptography.fernet import Fernet, MultiFernet
 import os
 import base64
-
-# En prod, obtener de variables de entorno (32 url-safe base64-encoded bytes)
 import hashlib
-# Derive a persistent 32 url-safe base64-encoded bytes key from the master SECRET_KEY
+from app.core.config import settings
 from app.core.security import SECRET_KEY
-h = hashlib.sha256(SECRET_KEY.encode()).digest()
-SECRET_KEY_MFA = os.getenv("MFA_ENCRYPTION_KEY", base64.urlsafe_b64encode(h).decode())
-fernet = Fernet(SECRET_KEY_MFA)
+
+# Clave primaria derivada de configuración
+h_primary = hashlib.sha256(SECRET_KEY.encode()).digest()
+primary_key = settings.MFA_ENCRYPTION_KEY or base64.urlsafe_b64encode(h_primary).decode()
+
+# Clave heredada para soporte de rotación sin invalidar datos existentes
+legacy_key = base64.urlsafe_b64encode(hashlib.sha256(b"fiscalis_mvp_key").digest()).decode()
+
+keys = [Fernet(primary_key)]
+if legacy_key != primary_key:
+    keys.append(Fernet(legacy_key))
+
+fernet = MultiFernet(keys)
 
 def encrypt_secret(secret: str) -> str:
     return fernet.encrypt(secret.encode()).decode()

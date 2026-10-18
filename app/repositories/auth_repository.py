@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.usuarios import Usuario
@@ -30,20 +31,18 @@ class AuthRepository:
         return mfa
 
     async def update_user_mfa_enabled(self, db: AsyncSession, mfa, enabled: bool):
-        from datetime import datetime
         mfa.enabled = enabled
-        mfa.confirmed_at = str(datetime.utcnow())
+        mfa.confirmed_at = datetime.now(timezone.utc).isoformat()
         await db.commit()
 
     async def upsert_device(self, db: AsyncSession, usuario_id, device_id: str) -> "DispositivoMovil":
         from app.models.usuarios import DispositivoMovil
-        from datetime import datetime
         import uuid
         stmt = select(DispositivoMovil).where(DispositivoMovil.device_id == device_id)
         dev = await db.scalar(stmt)
         if dev:
             dev.usuario_id = usuario_id
-            dev.last_seen_at = str(datetime.utcnow())
+            dev.last_seen_at = datetime.now(timezone.utc).isoformat()
             await db.commit()
             return dev
         
@@ -51,7 +50,7 @@ class AuthRepository:
             id=uuid.uuid4(),
             usuario_id=usuario_id,
             device_id=device_id,
-            last_seen_at=str(datetime.utcnow())
+            last_seen_at=datetime.now(timezone.utc).isoformat()
         )
         db.add(dev)
         await db.commit()

@@ -1,8 +1,10 @@
 # app/services/archivos.py
 import os
+import uuid
 import hashlib
 import aiofiles
 import logging
+
 # Intentamos importar magic, si falla, manejamos el error elegantemente
 try:
     import magic
@@ -40,7 +42,7 @@ class ArchivosService:
         
         # Fallback si magic falló o no está disponible
         if mime_detectado not in ALLOWED_TYPES.values():
-            ext = os.path.splitext(file.filename)[1].lower()
+            ext = os.path.splitext(file.filename or "")[1].lower()
             mime_detectado = ALLOWED_TYPES.get(ext)
             
         if not mime_detectado:

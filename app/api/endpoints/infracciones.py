@@ -39,6 +39,13 @@ async def sincronizar_infracciones(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Conflicto de integridad. El registro o la evidencia ya existen en el servidor. {str(e)}"
         )
+    except Exception as e:
+        import logging
+        logging.error(f"Server error during sync: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno en servidor. Gatillar Exponential Backoff: {str(e)}"
+        )
 
 @router.get("", status_code=status.HTTP_200_OK)
 async def listar_infracciones(

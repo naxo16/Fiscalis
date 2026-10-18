@@ -1,11 +1,12 @@
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
+from app.core.config import settings
 
-# Configuración mock temporal para el MVP
-SECRET_KEY = "fiscalis_mvp_key"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 días para operación Offline extendida
+# Configuración institucional derivada de settings
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 # Contexto criptográfico usando bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -18,10 +19,11 @@ def get_password_hash(password: str) -> str:
     """Genera el hash seguro (bcrypt) de una contraseña."""
     return pwd_context.hash(password)
 
-def create_access_token(data: dict, expires_delta_minutes: int = ACCESS_TOKEN_EXPIRE_MINUTES) -> str:
-    """Genera un token JWT firmado."""
+def create_access_token(data: dict, expires_delta_minutes: int | None = None) -> str:
+    """Genera un token JWT firmado según los estándares de producción."""
+    minutes = expires_delta_minutes if expires_delta_minutes is not None else ACCESS_TOKEN_EXPIRE_MINUTES
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=expires_delta_minutes)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
