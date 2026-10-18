@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
@@ -30,9 +31,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _handleLogin() async {
     final currentUrl = ref.read(serverUrlProvider);
-    if (currentUrl.isEmpty || currentUrl.contains('localhost')) {
+    final isMobileDevice = !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
+    if (currentUrl.isEmpty || (isMobileDevice && currentUrl.contains('localhost'))) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Configura la IP de tu servidor en Ajustes antes de iniciar sesión')),
+        const SnackBar(content: Text('En móvil o emulador, configure la IP de su PC o 10.0.2.2 en Ajustes')),
       );
       return;
     }
@@ -139,7 +141,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     isPassword: true,
                     inputFormatters: [OwaspSanitizerFormatter(64)],
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: () => Navigator.pushNamed(context, '/ajustes'),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.cloud_outlined, size: 14, color: Colors.black45),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Servidor: ${ref.watch(serverUrlProvider)}',
+                              style: const TextStyle(fontSize: 12, color: Colors.black54),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.edit, size: 12, color: Colors.black38),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   
                   // Botón de Acción
                   SizedBox(

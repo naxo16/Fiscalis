@@ -201,33 +201,44 @@ class AuthNotifier extends StateNotifier<bool> {
   }
 
   Future<void> _handleLoginError(dynamic e, int failedAttempts, AppDatabase? db) async {
-    if (e is DioException && e.response?.statusCode == 401) {
-      failedAttempts++;
-      
-      if (failedAttempts >= 5) {
-        await _storage.write(key: 'failedAttempts', value: failedAttempts.toString());
-        throw Exception('Bloqueo Temporal (Soft Lock) ACTIVADO: 5 intentos fallidos. Requiere reautenticación síncrona o clave de Supervisor.');
-      }
-
-      await _storage.write(key: 'failedAttempts', value: failedAttempts.toString());
-      throw Exception('Usuario o contraseña incorrectos. Intento $failedAttempts/5');
-    }
-
     if (e is DioException) {
+      if (e.response?.statusCode == 401) {
+        failedAttempts++;
+        if (failedAttempts >= 5) {
+          await _storage.write(key: 'failedAttempts', value: failedAttempts.toString());
+          throw Exception('Bloqueo Temporal (Soft Lock) ACTIVADO: 5 intentos fallidos. Requiere reautenticación síncrona o clave de Supervisor.');
+        }
+        await _storage.write(key: 'failedAttempts', value: failedAttempts.toString());
+        throw Exception('Usuario o contraseña incorrectos. Intento $failedAttempts/5');
+      }
+
       if (e.response?.statusCode == 403) {
-         // HARD PURGE: Ejecutado mediante orden remota (Revocado en la tabla maestra)
-         await _storage.deleteAll();
-         await Future.delayed(const Duration(milliseconds: 200));
-         if (db != null) {
-           await db.delete(db.actasInfraccion).go();
-           await db.delete(db.evidenciasFotograficas).go();
-         }
-         throw Exception('KILL SWITCH ACTIVADO (Hard Purge): Dispositivo Revocado remótamente. Evidencia destruida por seguridad.');
+        // HARD PURGE: Ejecutado mediante orden remota (Revocado en la tabla maestra)
+        await _storage.deleteAll();
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (db != null) {
+          await db.delete(db.actasInfraccion).go();
+          await db.delete(db.evidenciasFotograficas).go();
+        }
+        throw Exception('KILL SWITCH ACTIVADO (Hard Purge): Dispositivo Revocado remótamente. Evidencia destruida por seguridad.');
       }
+
+      if (e.type == DioExceptionType.connectionTimeout || 
+          e.type == DioExceptionType.receiveTimeout || 
+          e.type == DioExceptionType.sendTimeout) {
+        throw Exception('Tiempo de espera agotado al conectar con el backend. Verifique que el servidor esté activo.');
+      }
+
+      if (e.type == DioExceptionType.connectionError) {
+        throw Exception('No se pudo conectar con el servidor backend. Verifique la URL en Ajustes Técnicos (ícono ⚙️ superior).');
+      }
+
       if (failedAttempts >= 5) {
-         throw Exception('Dispositivo en Bloqueo Temporal. Requiere conexión al servidor para reautenticación.');
+        throw Exception('Dispositivo en Bloqueo Temporal. Requiere conexión al servidor para reautenticación.');
       }
-      throw Exception('Error del servidor: ${e.response?.statusCode}');
+
+      final detail = e.response?.data is Map ? e.response?.data['detail'] : null;
+      throw Exception(detail ?? 'Error del servidor (HTTP ${e.response?.statusCode ?? 'sin respuesta'})');
     }
     
     if (failedAttempts >= 5) {
@@ -244,7 +255,7 @@ class AuthNotifier extends StateNotifier<bool> {
       final response = await dio.post(
         '/api/v1/auth/mfa/validate',
         data: {'totp_code': code},
-        options: Options(headers: {'Authorization': 'Bearer '}),
+        options: Options(headers: {'Authorization': 'Bearer $jwt'}),
       );
 
       if (response.statusCode == 200) {

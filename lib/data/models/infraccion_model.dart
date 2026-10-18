@@ -53,7 +53,7 @@ class InfraccionModel extends Infraccion {
       fotos: fotos,
       fecha: row.createdAt,
       descripcion: row.observaciones,
-      firmaRechazo: row.firmaRechazo ?? false,
+      firmaRechazo: row.firmaRechazo,
       status: row.estadoActa == 'SYNCED' 
           ? InfraccionStatus.sincronizado 
           : InfraccionStatus.guardadoLocal,

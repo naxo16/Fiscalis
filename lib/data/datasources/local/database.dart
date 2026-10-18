@@ -58,7 +58,7 @@ class AppDatabase extends _$AppDatabase {
         name: 'fiscalis_secure',
         native: DriftNativeOptions(
           setup: (db) {
-            db.execute("PRAGMA key = '\$dbKey';");
+            db.execute("PRAGMA key = '$dbKey';");
           },
         ),
         web: DriftWebOptions(

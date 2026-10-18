@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -7,33 +8,61 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart'; // REQUIRED FOR Value
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../data/datasources/local/database.dart'; // RUTA CORREGIDA
+import '../../data/datasources/local/database.dart';
 import 'infraccion_provider.dart';
+
+class EvidenciaFotoItem {
+  final String path;
+  final String hash;
+  final Uint8List? bytes;
+
+  const EvidenciaFotoItem({
+    required this.path,
+    required this.hash,
+    this.bytes,
+  });
+
+  Map<String, String> toLegacyMap() {
+    return {'path': path, 'hash': hash};
+  }
+}
 
 class FormularioState {
   final double? latitud;
   final double? longitud;
-  final List<Map<String, String>> fotosConHash;
+  final List<EvidenciaFotoItem> evidencias;
   final bool isLoading;
+  final String? feedbackMessage;
+  final bool isUbicacionManual;
 
   FormularioState({
     this.latitud,
     this.longitud,
-    this.fotosConHash = const [],
+    this.evidencias = const [],
     this.isLoading = false,
+    this.feedbackMessage,
+    this.isUbicacionManual = false,
   });
+
+  // Backward-compatible getter for legacy callers
+  List<Map<String, String>> get fotosConHash => 
+      evidencias.map((e) => e.toLegacyMap()).toList();
 
   FormularioState copyWith({
     double? latitud,
     double? longitud,
-    List<Map<String, String>>? fotosConHash,
+    List<EvidenciaFotoItem>? evidencias,
     bool? isLoading,
+    String? feedbackMessage,
+    bool? isUbicacionManual,
   }) {
     return FormularioState(
       latitud: latitud ?? this.latitud,
       longitud: longitud ?? this.longitud,
-      fotosConHash: fotosConHash ?? this.fotosConHash,
+      evidencias: evidencias ?? this.evidencias,
       isLoading: isLoading ?? this.isLoading,
+      feedbackMessage: feedbackMessage,
+      isUbicacionManual: isUbicacionManual ?? this.isUbicacionManual,
     );
   }
 }
@@ -43,6 +72,10 @@ class FormularioInfraccionNotifier extends StateNotifier<FormularioState> {
   final ImagePicker _picker = ImagePicker();
   final _storage = const FlutterSecureStorage();
   int _inspectorId = 101; // Inspector ID por defecto (fallback)
+
+  // Coordenadas céntricas institucionales de Cauquenes como fallback
+  static const double kDefaultLatCauquenes = -35.9664;
+  static const double kDefaultLngCauquenes = -72.3114;
 
   FormularioInfraccionNotifier(this._db) : super(FormularioState()) {
     _initInspectorId();
@@ -54,120 +87,177 @@ class FormularioInfraccionNotifier extends StateNotifier<FormularioState> {
       if (idStr != null) {
         _inspectorId = int.tryParse(idStr) ?? 101;
       }
-    } catch (e) {
-      // Si falla la lectura, se mantiene el fallback por defecto
+    } catch (_) {
+      // Fallback por defecto 101
     }
   }
 
-  Future<void> capturarGPS() async {
-    state = state.copyWith(isLoading: true);
-    try {
-      bool serviceEnabled;
-      LocationPermission permission;
+  void setCoordenadasManuales(double lat, double lng) {
+    state = state.copyWith(
+      latitud: lat,
+      longitud: lng,
+      isUbicacionManual: true,
+      feedbackMessage: 'Coordenadas manuales establecidas',
+    );
+  }
 
-      // 1. Verificar si el GPS físico del teléfono está encendido
-      serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw Exception('El servicio de GPS está desactivado en el teléfono.');
+  Future<void> capturarGPS() async {
+    state = state.copyWith(isLoading: true, feedbackMessage: null);
+    try {
+      bool serviceEnabled = false;
+      try {
+        serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      } catch (_) {
+        // En navegadores o entornos sin soporte de sensor
+        serviceEnabled = false;
       }
 
-      // 2. Verificar si tenemos el permiso de la app
-      permission = await Geolocator.checkPermission();
+      if (!serviceEnabled) {
+        _aplicarFallbackCoordenadas('Sensor GPS no disponible. Aplicada ubicación municipal.');
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        // Lanza el popup nativo de Android pidiendo permiso
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          throw Exception('Permisos de ubicación denegados por el usuario.');
+          _aplicarFallbackCoordenadas('Permiso de GPS denegado. Se asignó ubicación institucional.');
+          return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        throw Exception('Permisos bloqueados permanentemente en Android. Ve a Ajustes.');
+        _aplicarFallbackCoordenadas('Permiso de GPS bloqueado permanentemente. Ubicación referencial.');
+        return;
       }
 
-      // 3. Si todo está en regla, ahora sí capturamos la coordenada
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
-      
-      state = state.copyWith(
-        latitud: position.latitude,
-        longitud: position.longitude,
-        isLoading: false,
-      );
+      Position? position;
+      try {
+        // Intentar obtener con timeout para que nunca se quede colgado
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 6),
+          ),
+        );
+      } catch (_) {
+        // Si hay timeout o error de sensor, intentar última conocida
+        position = await Geolocator.getLastKnownPosition();
+      }
+
+      if (position != null) {
+        state = state.copyWith(
+          latitud: position.latitude,
+          longitud: position.longitude,
+          isLoading: false,
+          isUbicacionManual: false,
+          feedbackMessage: 'Ubicación GPS obtenida con éxito (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})',
+        );
+      } else {
+        _aplicarFallbackCoordenadas('Sin señal satelital inmediata. Se asignó ubicación municipal.');
+      }
     } catch (e) {
-      state = state.copyWith(isLoading: false);
-      rethrow;
+      _aplicarFallbackCoordenadas('Ubicación referencial asignada (Modo contingencia).');
     }
   }
 
-  Future<void> tomarFotografia() async {
+  void _aplicarFallbackCoordenadas(String mensaje) {
+    state = state.copyWith(
+      latitud: kDefaultLatCauquenes,
+      longitud: kDefaultLngCauquenes,
+      isLoading: false,
+      isUbicacionManual: true,
+      feedbackMessage: mensaje,
+    );
+  }
+
+  Future<bool> tomarFotografia({ImageSource source = ImageSource.camera}) async {
+    state = state.copyWith(feedbackMessage: null);
     try {
-      // Se limita resolución y calidad para evitar OutOfMemory y cierres (Activity Death) en Android
       final XFile? photo = await _picker.pickImage(
-        source: ImageSource.camera, 
-        imageQuality: 50,
+        source: source,
+        imageQuality: 55,
         maxWidth: 1280,
         maxHeight: 1280,
       );
-      if (photo == null) return;
+      if (photo == null) return false;
 
-      final Directory appDocDir = await getApplicationDocumentsDirectory();
-      final String fileName = '${const Uuid().v4()}.jpg';
-      final String permanentPath = '${appDocDir.path}/$fileName';
-      final File savedImage = await File(photo.path).copy(permanentPath);
+      // Leer bytes siempre compatible con Web, Desktop y Móvil
+      final Uint8List bytes = await photo.readAsBytes();
+      final String hash = sha256.convert(bytes).toString();
 
-      final bytes = await savedImage.readAsBytes();
-      final hash = sha256.convert(bytes).toString();
+      String finalPath;
+      if (kIsWeb) {
+        finalPath = 'web_blob_${const Uuid().v4()}.jpg';
+      } else {
+        try {
+          final Directory appDocDir = await getApplicationDocumentsDirectory();
+          final String fileName = '${const Uuid().v4()}.jpg';
+          finalPath = '${appDocDir.path}/$fileName';
+          await File(finalPath).writeAsBytes(bytes);
+        } catch (_) {
+          finalPath = photo.path;
+        }
+      }
+
+      final nuevoItem = EvidenciaFotoItem(
+        path: finalPath,
+        hash: hash,
+        bytes: bytes,
+      );
 
       state = state.copyWith(
-        fotosConHash: [
-          ...state.fotosConHash,
-          {'path': savedImage.path, 'hash': hash},
-        ],
+        evidencias: [...state.evidencias, nuevoItem],
+        feedbackMessage: 'Fotografía adjuntada con éxito (Hash: ${hash.substring(0, 8)})',
       );
+      return true;
     } catch (e) {
-      // Fallback silencioso
+      state = state.copyWith(
+        feedbackMessage: 'No se pudo capturar la imagen. Intente desde galería/archivos.',
+      );
+      return false;
     }
   }
 
   Future<void> recuperarFotoPerdida() async {
+    if (kIsWeb) return;
     try {
       if (Platform.isAndroid) {
         final LostDataResponse response = await _picker.retrieveLostData();
         if (response.isEmpty || response.file == null) return;
 
+        final bytes = await response.file!.readAsBytes();
+        final hash = sha256.convert(bytes).toString();
+
         final Directory appDocDir = await getApplicationDocumentsDirectory();
         final String fileName = '${const Uuid().v4()}.jpg';
         final String permanentPath = '${appDocDir.path}/$fileName';
-        final File savedImage = await File(response.file!.path).copy(permanentPath);
+        await File(permanentPath).writeAsBytes(bytes);
 
-        final bytes = await savedImage.readAsBytes();
-        final hash = sha256.convert(bytes).toString();
+        final nuevoItem = EvidenciaFotoItem(
+          path: permanentPath,
+          hash: hash,
+          bytes: bytes,
+        );
 
         state = state.copyWith(
-          fotosConHash: [
-            ...state.fotosConHash,
-            {'path': savedImage.path, 'hash': hash},
-          ],
+          evidencias: [...state.evidencias, nuevoItem],
         );
       }
-    } catch (e) {
-      // Evitar que fallos nativos rompan la app
-    }
+    } catch (_) {}
   }
 
   void eliminarFotografia(String path) {
-    final newFotos = state.fotosConHash.where((f) => f['path'] != path).toList();
-    state = state.copyWith(fotosConHash: newFotos);
+    final newEvidencias = state.evidencias.where((f) => f.path != path).toList();
+    state = state.copyWith(evidencias: newEvidencias);
 
-    try {
-      final file = File(path);
-      if (file.existsSync()) {
-        file.deleteSync();
-      }
-    } catch (_) {
-      // Ignorar errores al borrar
+    if (!kIsWeb) {
+      try {
+        final file = File(path);
+        if (file.existsSync()) {
+          file.deleteSync();
+        }
+      } catch (_) {}
     }
   }
 

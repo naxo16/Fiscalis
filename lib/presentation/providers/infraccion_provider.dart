@@ -21,8 +21,9 @@ final dioProvider = Provider<Dio>((ref) {
   final baseUrl = ref.watch(serverUrlProvider);
   final dio = Dio(BaseOptions(
     baseUrl: baseUrl,
-    connectTimeout: const Duration(seconds: 5),
-    receiveTimeout: const Duration(seconds: 5),
+    connectTimeout: const Duration(seconds: 30),
+    receiveTimeout: const Duration(seconds: 30),
+    sendTimeout: const Duration(seconds: 30),
   ));
   
   dio.interceptors.add(InterceptorsWrapper(

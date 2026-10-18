@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/formulario_provider.dart';
 import '../providers/infraccion_provider.dart';
@@ -32,9 +34,7 @@ class _NuevaInfraccionScreenState extends ConsumerState<NuevaInfraccionScreen> {
   bool _firmaRechazo = false;
 
   // Paleta de colores Tailwind extraída de tu HTML
-  final Color _cBackground = const Color(0xFFF9F9F9);
   final Color _cPrimary = const Color(0xFF171557);
-  final Color _cPrimaryContainer = const Color(0xFF2D2D6D);
   final Color _cOnPrimary = const Color(0xFFFFFFFF);
   final Color _cSurface = const Color(0xFFFFFFFF);
   final Color _cSurfaceContainerLow = const Color(0xFFF3F3F3);
@@ -159,12 +159,31 @@ class _NuevaInfraccionScreenState extends ConsumerState<NuevaInfraccionScreen> {
         
         await _clearDraft();
 
-        if (!context.mounted) return;
-        try { await ref.read(syncServiceProvider).syncPendingInfracciones(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Guardado y enviado a Render'))); } catch (_) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Guardado localmente (Offline)'))); }
+        if (!mounted) return;
+        try {
+          await ref.read(syncServiceProvider).syncPendingInfracciones();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Acta guardada y sincronizada con el servidor central.'),
+                backgroundColor: Color(0xFF1B5E20),
+              ),
+            );
+          }
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Acta resguardada localmente en dispositivo (Modo Offline)'),
+                backgroundColor: Color(0xFFE65100),
+              ),
+            );
+          }
+        }
         // Navegar al historial
         // Navigator.pushReplacementNamed(context, '/historial');
       } catch (e) {
-        if (!context.mounted) return;
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: _cError),
         );
@@ -303,7 +322,7 @@ class _NuevaInfraccionScreenState extends ConsumerState<NuevaInfraccionScreen> {
           Consumer(
             builder: (context, ref, child) {
               final currentUrl = ref.watch(serverUrlProvider);
-              final isOnlineConfigured = currentUrl.isNotEmpty && !currentUrl.contains('localhost');
+              final isOnlineConfigured = currentUrl.isNotEmpty && (kIsWeb || !currentUrl.contains('localhost'));
               
               return Container(
                 width: double.infinity,
@@ -483,27 +502,192 @@ class _NuevaInfraccionScreenState extends ConsumerState<NuevaInfraccionScreen> {
     );
   }
 
+  void _showImageSourceSelector() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Adjuntar Evidencia Fotográfica',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: _cPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Seleccione el medio de captura para la prueba de fiscalización:',
+                  style: TextStyle(fontSize: 13, color: _cOnSurfaceVariant),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: _cPrimary.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.photo_camera, color: _cPrimary),
+                  ),
+                  title: const Text('Tomar Foto con Cámara', style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Captura directa de la placa o infracción'),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final notifier = ref.read(formularioInfraccionProvider.notifier);
+                    final ok = await notifier.tomarFotografia(source: ImageSource.camera);
+                    if (!ok && mounted) {
+                      final msg = ref.read(formularioInfraccionProvider).feedbackMessage;
+                      if (msg != null) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+                      }
+                    }
+                  },
+                ),
+                const Divider(),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.photo_library, color: Color(0xFF2E7D32)),
+                  ),
+                  title: const Text('Seleccionar de Galería / Archivo', style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Compatible con emuladores, web y archivos locales'),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final notifier = ref.read(formularioInfraccionProvider.notifier);
+                    final ok = await notifier.tomarFotografia(source: ImageSource.gallery);
+                    if (!ok && mounted) {
+                      final msg = ref.read(formularioInfraccionProvider).feedbackMessage;
+                      if (msg != null) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+                      }
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showManualCoordinatesDialog(FormularioState formState) {
+    final latCtrl = TextEditingController(text: (formState.latitud ?? FormularioInfraccionNotifier.kDefaultLatCauquenes).toStringAsFixed(6));
+    final lngCtrl = TextEditingController(text: (formState.longitud ?? FormularioInfraccionNotifier.kDefaultLngCauquenes).toStringAsFixed(6));
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ingresar Coordenadas'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'En caso de contingencia o ausencia de señal satelital, ingrese o confirme las coordenadas de referencia:',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: latCtrl,
+              decoration: const InputDecoration(labelText: 'Latitud', border: OutlineInputBorder()),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: lngCtrl,
+              decoration: const InputDecoration(labelText: 'Longitud', border: OutlineInputBorder()),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: _cPrimary),
+            onPressed: () {
+              final double? lat = double.tryParse(latCtrl.text);
+              final double? lng = double.tryParse(lngCtrl.text);
+              if (lat != null && lng != null) {
+                ref.read(formularioInfraccionProvider.notifier).setCoordenadasManuales(lat, lng);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Coordenadas fijadas: $lat, $lng')),
+                );
+              }
+            },
+            child: const Text('Guardar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildUbicacionBox(FormularioState formState) {
+    final bool hasCoords = formState.latitud != null && formState.longitud != null;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _cSurfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF777681), width: 1), // Borde sólido en reemplazo del dashed web
+        border: Border.all(
+          color: hasCoords ? const Color(0xFF2E7D32) : const Color(0xFF777681),
+          width: hasCoords ? 1.5 : 1,
+        ),
       ),
       child: Column(
         children: [
           Row(
             children: [
-              Icon(Icons.location_on, color: _cOnSurfaceVariant, size: 20),
+              Icon(
+                hasCoords ? Icons.check_circle : Icons.location_on,
+                color: hasCoords ? const Color(0xFF2E7D32) : _cOnSurfaceVariant,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  formState.latitud != null 
-                    ? 'Lat: ${formState.latitud?.toStringAsFixed(3)} • Lng: ${formState.longitud?.toStringAsFixed(3)}'
-                    : 'Sin coordenadas capturadas',
-                  style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: _cOnSurfaceVariant),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasCoords 
+                        ? 'Lat: ${formState.latitud?.toStringAsFixed(5)} • Lng: ${formState.longitud?.toStringAsFixed(5)}'
+                        : 'Sin coordenadas capturadas',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        fontWeight: hasCoords ? FontWeight.w600 : FontWeight.normal,
+                        color: hasCoords ? const Color(0xFF1B5E20) : _cOnSurfaceVariant,
+                      ),
+                    ),
+                    if (formState.isUbicacionManual)
+                      const Text(
+                        '(Ubicación institucional / manual de referencia)',
+                        style: TextStyle(fontSize: 11, color: Color(0xFFE65100), fontStyle: FontStyle.italic),
+                      ),
+                  ],
                 ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_location_alt, size: 20),
+                tooltip: 'Editar o ingresar manualmente',
+                onPressed: () => _showManualCoordinatesDialog(formState),
               ),
             ],
           ),
@@ -512,12 +696,23 @@ class _NuevaInfraccionScreenState extends ConsumerState<NuevaInfraccionScreen> {
             width: double.infinity,
             height: 48,
             child: ElevatedButton.icon(
-              onPressed: formState.isLoading ? null : () => ref.read(formularioInfraccionProvider.notifier).capturarGPS(),
+              onPressed: formState.isLoading ? null : () async {
+                final notifier = ref.read(formularioInfraccionProvider.notifier);
+                await notifier.capturarGPS();
+                if (mounted) {
+                  final msg = ref.read(formularioInfraccionProvider).feedbackMessage;
+                  if (msg != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(msg), duration: const Duration(seconds: 3)),
+                    );
+                  }
+                }
+              },
               icon: formState.isLoading 
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                   : Icon(Icons.my_location, color: _cOnPrimary),
               label: Text(
-                'Obtener Ubicación GPS',
+                formState.isLoading ? 'Detectando satélites...' : 'Obtener Ubicación GPS',
                 style: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.05, color: _cOnPrimary),
               ),
               style: ElevatedButton.styleFrom(
@@ -538,122 +733,126 @@ class _NuevaInfraccionScreenState extends ConsumerState<NuevaInfraccionScreen> {
       children: [
         // Botón Tomar Foto
         GestureDetector(
-          onTap: () => ref.read(formularioInfraccionProvider.notifier).tomarFotografia(),
+          onTap: _showImageSourceSelector,
           child: Container(
             height: 100,
-            width: 80,
+            width: 86,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _cPrimary, width: 2), // Borde sólido simulando el dashed
+              border: Border.all(color: _cPrimary, width: 2),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.photo_camera, color: _cPrimary),
+                Icon(Icons.add_a_photo, color: _cPrimary),
                 const SizedBox(height: 4),
                 Text(
-                  'Tomar\nFotografía',
+                  'Adjuntar\nEvidencia',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: _cPrimary, height: 1.1),
+                  style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w600, color: _cPrimary, height: 1.1),
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 14),
         
         // Miniaturas
         Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: formState.fotosConHash.map((foto) {
-                final hashShort = foto['hash']!.substring(0, 8);
-                return Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: Column(
-                    children: [
-                      Container(
-                        height: 80,
-                        width: 80,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDADADA), // surface-dim
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _cOutlineVariant),
-                          image: foto['path'] != null
-                              ? DecorationImage(
-                                  image: FileImage(File(foto['path']!)),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
-                        ),
-                        child: Stack(
+          child: formState.evidencias.isEmpty
+              ? Container(
+                  height: 100,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _cSurfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _cOutlineVariant, style: BorderStyle.solid),
+                  ),
+                  child: Text(
+                    'No hay fotografías agregadas.\nSe recomienda al menos una imagen.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: _cOnSurfaceVariant),
+                  ),
+                )
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: formState.evidencias.map((evidencia) {
+                      final hashShort = evidencia.hash.length >= 8 ? evidencia.hash.substring(0, 8) : evidencia.hash;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Column(
                           children: [
-                            if (foto['path'] == null)
-                              const Center(child: Icon(Icons.image, color: Color(0xFF777681))),
-                            Positioned(
-                              top: 4,
-                              right: 4,
-                              child: GestureDetector(
-                                onTap: () {
-                                  if (foto['path'] != null) {
-                                    ref.read(formularioInfraccionProvider.notifier).eliminarFotografia(foto['path']!);
-                                  }
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(color: _cSurface, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 2)]),
-                                  child: Icon(Icons.close, size: 16, color: _cError),
-                                ),
+                            Container(
+                              height: 80,
+                              width: 80,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDADADA),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: _cOutlineVariant),
                               ),
+                              clipBehavior: Clip.antiAlias,
+                              child: Stack(
+                                children: [
+                                  // Imagen Cross-Platform (Memory o File)
+                                  Positioned.fill(
+                                    child: Builder(
+                                      builder: (context) {
+                                        if (evidencia.bytes != null) {
+                                          return Image.memory(
+                                            evidencia.bytes!,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+                                          );
+                                        }
+                                        if (!kIsWeb && evidencia.path.isNotEmpty) {
+                                          return Image.file(
+                                            File(evidencia.path),
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+                                          );
+                                        }
+                                        return const Center(child: Icon(Icons.image, color: Color(0xFF777681)));
+                                      },
+                                    ),
+                                  ),
+                                  // Botón eliminar
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        ref.read(formularioInfraccionProvider.notifier).eliminarFotografia(evidencia.path);
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(3),
+                                        decoration: BoxDecoration(
+                                          color: _cSurface,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 2),
+                                          ],
+                                        ),
+                                        child: Icon(Icons.close, size: 14, color: _cError),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              hashShort,
+                              style: TextStyle(fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.w600, color: _cOnSurfaceVariant),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        hashShort,
-                        style: TextStyle(fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.w500, color: _cOnSurfaceVariant),
-                      ),
-                    ],
+                      );
+                    }).toList(),
                   ),
-                );
-              }).toList(),
-            ),
-          ),
+                ),
         ),
       ],
-    );
-  }
-
-  Widget _buildNavTab(IconData icon, String label, {required bool isActive}) {
-    return GestureDetector(
-      onTap: () {
-        // TODO: Rutas de navegación (ej: Navigator.pushReplacementNamed)
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        decoration: BoxDecoration(
-          color: isActive ? _cSecondaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: isActive ? _cPrimary : _cOnSurfaceVariant),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: isActive ? _cPrimary : _cOnSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
