@@ -32,22 +32,36 @@ env/
 *.swo
 *~
 
-# Archivos sensibles
+# Archivos sensibles y credenciales
 .env
 .env.local
 .env.*.local
+*.pem
+*.key
+*.crt
 
-# Base de datos
+# Base de datos y volcados de datos sensibles
 *.db
 *.sqlite
 *.sqlite3
+*.sql
+*.dump
+*.bak
+solo_datos.sql
+schema_actual.sql
 
-# Logs
+# Logs y trazas de auditoría
 logs/
 *.log
-# otros
-.sqlite
-.sql
-.context
+
+# Documentación sensible e interna (Confidencialidad institucional)
+*.md
+!README.md
 .context/
-diccionario_datos.md
+.context
+docs/
+
+# Scripts de prueba locales con credenciales temporales
+scripts/inspect_mfa.py
+scripts/seed_mfa_inspector.py
+scripts/generate_and_test_150_records.py
