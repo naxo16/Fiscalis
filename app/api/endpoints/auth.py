@@ -47,11 +47,26 @@ async def login_for_access_token(
 ):
     user = await auth_repo.get_user_by_username(db, username=request_data.username)
     
-    if not user or not verify_password(request_data.password, user.hashed_password):
+    # OWASP A07: Mitigación de User Enumeration mediante Timing Attack
+    if not user:
+        verify_password(request_data.password, "$2b$12$e86XoX2JcR4N9mQ0sZ3W3O8h3v1n1f8K4J8L9P0Q1R2S3T4U5V6W7")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario o contraseÃ±a incorrectos",
+            detail="Usuario o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not verify_password(request_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario o contraseña incorrectos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    if not user.activo:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuario inactivo o revocado por administración institucional",
         )
     
     # Device Binding (si se provee)

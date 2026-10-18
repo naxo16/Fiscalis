@@ -1,5 +1,5 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
@@ -37,26 +37,28 @@ async def sincronizar_infracciones(
         logging.error(f"IntegrityError: {e}")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Conflicto de integridad. El registro o la evidencia ya existen en el servidor. {str(e)}"
+            detail="Conflicto de integridad. El registro o la evidencia ya existen en el servidor."
         )
     except Exception as e:
         import logging
         logging.error(f"Server error during sync: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno en servidor. Gatillar Exponential Backoff: {str(e)}"
+            detail="Error interno en servidor. Gatillar Exponential Backoff."
         )
 
 @router.get("", status_code=status.HTTP_200_OK)
 async def listar_infracciones(
+    limit: int = Query(default=100, ge=1, le=500, description="Límite máximo de registros (OWASP API4)"),
+    offset: int = Query(default=0, ge=0, description="Offset de paginación"),
     db: AsyncSession = Depends(get_db),
     inspector_id: uuid.UUID = Depends(get_current_inspector)
 ):
     """
-    Endpoint para listar los resultados de las infracciones sincronizadas.
+    Endpoint para listar los resultados de las infracciones sincronizadas con paginación controlada.
     """
-    # En un escenario real esto se manejaría en un InfraccionRepository
-    result = await db.scalars(select(InfraccionVehicular))
+    stmt = select(InfraccionVehicular).order_by(InfraccionVehicular.fecha_emision.desc()).offset(offset).limit(limit)
+    result = await db.scalars(stmt)
     infracciones = result.all()
     
     return [

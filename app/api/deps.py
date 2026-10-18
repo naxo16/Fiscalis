@@ -36,7 +36,10 @@ async def get_current_inspector(
         inspector_id: str | None = payload.get("sub")
         scopes: list = payload.get("scopes", [])
         
-        if inspector_id is None or "access" not in scopes:
+        user_uuid = uuid.UUID(inspector_id)
+        from app.models.usuarios import Usuario
+        user = await db.get(Usuario, user_uuid)
+        if not user or not user.activo:
             raise credentials_exception
             
         device_id = payload.get("device_id")
@@ -47,7 +50,7 @@ async def get_current_inspector(
             if dev and dev.revocado:
                 raise HTTPException(status_code=403, detail="DEVICE_REVOKED")
         
-        return uuid.UUID(inspector_id)
+        return user_uuid
         
     except (InvalidTokenError, ValueError):
         raise credentials_exception

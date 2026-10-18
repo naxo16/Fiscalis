@@ -54,14 +54,22 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     logger.warning(f"Error de validación 422 en {request.method} {request.url.path}: {exc.errors()}")
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors(), "body": exc.body},
+        content={"detail": exc.errors()},
     )
 
 @app.middleware("http")
 async def add_security_and_corp_headers(request: Request, call_next):
     response = await call_next(request)
-    # Soporte para Cross-Origin Resource Policy (CORP) requerido por Flutter Web
+    # OWASP A05: Security Misconfiguration - Encabezados de defensa en profundidad
     response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
+    # Eliminar divulgación de tecnología (Server banner)
+    if "Server" in response.headers:
+        del response.headers["Server"]
     return response
 
 # Configuración avanzada de CORS para Flutter Web y producción
@@ -116,7 +124,7 @@ async def health_check():
             status_code=503,
             content={
                 "status": "degraded",
-                "database": f"unreachable: {str(e)}",
+                "database": "unreachable",
                 "system": settings.PROJECT_NAME,
                 "version": settings.VERSION,
                 "environment": settings.ENVIRONMENT

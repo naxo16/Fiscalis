@@ -20,12 +20,19 @@ class SyncRepository:
             return existente
 
         try:
-            # 1. Transformación Geoespacial (PostGIS)
+            # 1. Transformación Geoespacial Segura (PostGIS - Sanitización anti-inyección)
             # Extraer lat y lon del string "-35.9664047,-72.3114046"
             partes_coord = payload.coordenadas.split(',')
-            lat = partes_coord[0].strip() if len(partes_coord) > 0 else "0"
-            lon = partes_coord[1].strip() if len(partes_coord) > 1 else "0"
-            ubicacion_wkt = f"SRID=4326;POINT({lon} {lat})"
+            lat_raw = partes_coord[0].strip() if len(partes_coord) > 0 else "0"
+            lon_raw = partes_coord[1].strip() if len(partes_coord) > 1 else "0"
+            try:
+                lat_f = float(lat_raw)
+                lon_f = float(lon_raw)
+                if not (-90.0 <= lat_f <= 90.0 and -180.0 <= lon_f <= 180.0):
+                    lat_f, lon_f = 0.0, 0.0
+            except (ValueError, TypeError):
+                lat_f, lon_f = 0.0, 0.0
+            ubicacion_wkt = f"SRID=4326;POINT({lon_f} {lat_f})"
             
             # 2. Desarmar Payload para InfraccionesVehiculares
             nueva_acta = InfraccionVehicular(
@@ -35,7 +42,7 @@ class SyncRepository:
                 modulo="infraccion_vehicular",
                 estado=payload.status,
                 fecha_emision=payload.fecha,
-                ubicacion=f'SRID=4326;POINT({lon} {lat})',
+                ubicacion=ubicacion_wkt,
                 ppu=payload.ppu,
                 rut_infractor=payload.rutInfractor,
                 nombre_completo=payload.nombreCompleto,
