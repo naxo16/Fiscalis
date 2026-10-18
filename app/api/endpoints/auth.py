@@ -49,7 +49,7 @@ async def login_for_access_token(
     
     # OWASP A07: Mitigación de User Enumeration mediante Timing Attack
     if not user:
-        verify_password(request_data.password, "$2b$12$e86XoX2JcR4N9mQ0sZ3W3O8h3v1n1f8K4J8L9P0Q1R2S3T4U5V6W7")
+        verify_password(request_data.password, "$2b$12$FncKS8WqeN2Ipe/CcJAcFeNVysLyxvNSnDIu7x5aLHYhP7Mmtr6DO")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos",
