@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     DATABASE_URL: str
-    SECRET_KEY: str
+    SECRET_KEY: str = "fiscalis_secret_key_cauquenes_prod_2026_mvp_secure_seed"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 días para operación Offline extendida
     MFA_ENCRYPTION_KEY: str | None = None
