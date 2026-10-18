@@ -76,3 +76,13 @@ venv/
 .env/
 oracleJdk-26/
 .gradle/
+
+# =============================================================================
+# DOCUMENTACIÓN PRIVADA E INTERNA
+# =============================================================================
+*.md
+!README.md
+!ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md
+.context/
+.context
+docs/
