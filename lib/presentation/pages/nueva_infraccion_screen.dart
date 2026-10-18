@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/formulario_provider.dart';
@@ -211,58 +212,61 @@ class _NuevaInfraccionScreenState extends ConsumerState<NuevaInfraccionScreen> {
             ),
           ),
           
-          // Contenido Principal Scrollable
-          SingleChildScrollView(
-            padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 200),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Títulos
-                Text(
-                  'Nueva Infracción',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: _cPrimary,
-                    letterSpacing: -0.01,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Complete el formulario para registrar un nuevo incidente.',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 16,
-                    color: _cOnSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
+          // Contenido Principal Scrollable con diseño responsivo (App Store / Play Store guidelines)
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 860),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 200),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Títulos con animación suave
+                    Text(
+                      'Nueva Infracción',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: _cPrimary,
+                        letterSpacing: -0.01,
+                      ),
+                    ).animate().fadeIn(duration: 250.ms).slideX(begin: -0.05, end: 0),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Complete el formulario para registrar un nuevo incidente.',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 16,
+                        color: _cOnSurfaceVariant,
+                      ),
+                    ).animate().fadeIn(duration: 300.ms, delay: 50.ms),
+                    const SizedBox(height: 16),
 
-                // Contenedor del Formulario
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _cSurface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _cOutlineVariant),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2)),
-                    ],
-                  ),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildInputGroup('Nombre (Opcional)', _buildTextField(_nombreController, 'Nombre completo del infractor')),
-                        const SizedBox(height: 16),
-                        _buildInputGroup('RUT (Opcional)', _buildTextField(_rutController, 'Ej: 12.345.678-9', inputFormatters: [RutFormatter()], maxLength: 12)),
-                        const SizedBox(height: 16),
-                        _buildInputGroup('PPU', _buildPpuRow()),
-                        const SizedBox(height: 16),
-                        _buildInputGroup('Tipo de Infracción', _buildAutocomplete(_tipoInfraccionController, ['Advertencia', 'Citación'])),
-                        const SizedBox(height: 16),
+                    // Contenedor del Formulario Responsivo
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: _cSurface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _cOutlineVariant),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildInputGroup('Nombre (Opcional)', _buildTextField(_nombreController, 'Nombre completo del infractor')),
+                            const SizedBox(height: 16),
+                            _buildInputGroup('RUT (Opcional)', _buildTextField(_rutController, 'Ej: 12.345.678-9', inputFormatters: [RutFormatter()], maxLength: 12)),
+                            const SizedBox(height: 16),
+                            _buildInputGroup('PPU', _buildPpuRow()),
+                            const SizedBox(height: 16),
+                            _buildInputGroup('Tipo de Infracción', _buildAutocomplete(_tipoInfraccionController, ['Advertencia', 'Citación'])),
+                            const SizedBox(height: 16),
                         _buildInputGroup('Tipo de Vehículo', _buildAutocomplete(_tipoController, ['Automóvil', 'Camioneta', 'Motocicleta', 'Furgón', 'Camión'])),
                         const SizedBox(height: 16),
                         _buildInputGroup('Marca', _buildAutocomplete(_marcaController, ['Chevrolet', 'Toyota', 'Nissan', 'Hyundai', 'Kia'])),
@@ -313,6 +317,8 @@ class _NuevaInfraccionScreenState extends ConsumerState<NuevaInfraccionScreen> {
               ],
             ),
           ),
+        ),
+      ),
 
         ],
       ),
@@ -349,23 +355,28 @@ class _NuevaInfraccionScreenState extends ConsumerState<NuevaInfraccionScreen> {
               );
             },
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton.icon(
-                onPressed: _guardar,
-                icon: Icon(Icons.save, color: _cOnPrimary),
-                label: const FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text('Guardar Infracción', style: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _cPrimary,
-                  disabledBackgroundColor: _cPrimary.withValues(alpha: 0.5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                  elevation: 2,
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 860),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _guardar,
+                    icon: Icon(Icons.save, color: _cOnPrimary),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Guardar Infracción', style: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _cPrimary,
+                      disabledBackgroundColor: _cPrimary.withValues(alpha: 0.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      elevation: 2,
+                    ),
+                  ),
                 ),
               ),
             ),
