@@ -84,3 +84,10 @@ Cobertura verificada:
 3. `test_cors_flutter_web.py`: Preflight OPTIONS de origen cruzado para puertos dinámicos de Flutter Web.
 4. `test_infracciones.py`: Rechazo de payloads malformados (422) y manejo de caídas de BD (500 Exponential Backoff).
 5. `test_sync_e2e.py`: Idempotencia de transacciones, persistencia geométrica PostGIS y serialización de actas.
+
+---
+
+## 📚 Documentación Institucional y Gobernanza
+
+> **Nota de Confidencialidad y Seguridad**:
+> En estricto cumplimiento de las políticas de ciberseguridad (Ley N° 21.663) y protección de datos, la documentación sensible (`GOBERNANZA_Y_SERVICIOS_TI.md`, `diccionario_datos.md`, volcados `.sql` y matrices DRP) se gestiona de forma restringida en el entorno local institucional y está excluida del repositorio público GitHub vía `.gitignore`.
